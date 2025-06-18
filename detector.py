@@ -66,7 +66,7 @@ def process_chunk(chunk, key, query_counts, window_start, time_window, volume_th
                     window_start = timestamp
                 query_counts[query_name] += 1
 
-                if (entropy > 3.5 or query_length > 50 or query_counts[query_name] > volume_threshold):
+                if (entropy > 3.0 or query_length > 40 or query_counts[query_name] > 50):
                     alert = {
                         "timestamp": timestamp,
                         "query_name": query_name,
@@ -85,3 +85,10 @@ if __name__ == "__main__":
     log_file = sys.argv[1] if len(sys.argv) > 1 else LOG_FILE
     alerts = detect_tunneling(log_file)
     print(f"Total Alerts: {len(alerts)}")
+def detect_tunneling(log_file, time_window=300, volume_threshold=50):
+    key = load_key()
+    fernet = Fernet(key)  # Cache Fernet instance
+    alerts = []
+    ...
+    query_name = fernet.decrypt(log_entry["query_name"].encode()).decode()
+
