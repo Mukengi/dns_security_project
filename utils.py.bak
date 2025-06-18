@@ -1,0 +1,6 @@
+# utils.py
+import hashlib
+
+def hash_data(data):
+    """Generate SHA-256 hash of data."""
+    return hashlib.sha256(data.encode()).hexdigest()

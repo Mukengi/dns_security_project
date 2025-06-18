@@ -1,0 +1,2 @@
+Timestamp,Source IP,Destination IP,Query Name,Query Type
+1623273600.123,192.168.1.100,8.8.8.8,xyz123.tunnel.com,1
