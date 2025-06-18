@@ -33,7 +33,7 @@ def detect_tunneling(log_file, time_window=300, volume_threshold=100):
     query_counts = defaultdict(int)
     window_start = None
 
-    print(f"CPU Usage: {psutil.cpu_percent()}%, Memory: {psutil.virtual_memory().percent}%")
+    print(f"Initial CPU Usage: {psutil.cpu_percent()}%, Memory: {psutil.virtual_memory().percent}%")
 
     with open(log_file, "r") as f:
         chunk = []
@@ -45,6 +45,7 @@ def detect_tunneling(log_file, time_window=300, volume_threshold=100):
         if chunk:
             process_chunk(chunk, key, query_counts, window_start, time_window, volume_threshold, alerts)
     
+    print(f"Final CPU Usage: {psutil.cpu_percent()}%, Memory: {psutil.virtual_memory().percent}%")
     return alerts
 
 def process_chunk(chunk, key, query_counts, window_start, time_window, volume_threshold, alerts):
@@ -80,5 +81,7 @@ def process_chunk(chunk, key, query_counts, window_start, time_window, volume_th
             print(f"Error processing log entry: {e}")
 
 if __name__ == "__main__":
-    alerts = detect_tunneling(LOG_FILE)
+    import sys
+    log_file = sys.argv[1] if len(sys.argv) > 1 else LOG_FILE
+    alerts = detect_tunneling(log_file)
     print(f"Total Alerts: {len(alerts)}")
