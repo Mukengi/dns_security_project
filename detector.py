@@ -1,5 +1,6 @@
 
 # detector.py
+import cProfile
 import json
 import math
 from collections import defaultdict, Counter
@@ -72,7 +73,10 @@ def detect_hybrid(log_file, time_window=300, volume_threshold=100):
                 chunk = []
         if chunk:
             process_chunk(chunk, fernet, query_counts, window_start, time_window, volume_threshold, alerts, features, queries)
-
+        if len(features) > 10000:
+           indices = np.random.choice(len(features), 10000, replace=False)
+           features = np.array(features)[indices]
+           queries = [queries[i] for i in indices]
     # ML Detection
     if features:
         model = IsolationForest(contamination=0.1, random_state=42)
@@ -133,6 +137,8 @@ def process_chunk(chunk, fernet, query_counts, window_start, time_window, volume
 if __name__ == "__main__":
     import sys
     log_file = sys.argv[1] if len(sys.argv) > 1 else LOG_FILE
+    alerts = detect_hybrid(log_file)
+    cProfile.run('detect_hybrid(log_file)', 'profile_stats.txt')
     alerts = detect_hybrid(log_file)
     print(f"Total Alerts: {len(alerts)}")
 
