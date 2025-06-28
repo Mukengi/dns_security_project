@@ -1,25 +1,31 @@
-# cicids_converter.py
-import pandas as pd
+import csv
 import json
-from utils import load_key, encrypt_data
+from cryptography.fernet import Fernet
+from utils import load_key
+import os
 
-def convert_cicids_to_jsonl(input_csv, output_jsonl):
-    """Convert CICIDS 2017 CSV to JSON Lines format."""
-    key = load_key()
-    df = pd.read_csv(input_csv)
-    with open(output_jsonl, "a") as f:
-        for _, row in df.iterrows():
-            log_entry = {
-                "timestamp": row.get("Timestamp", 0.0),
-                "src_ip": encrypt_data(row.get("Source IP", "0.0.0.0"), key),
-                "dst_ip": encrypt_data(row.get("Destination IP", "0.0.0.0"), key),
-                "type": "query",
-                "query_name": encrypt_data(row.get("Query Name", ""), key),
-                "query_type": row.get("Query Type", 1)
-            }
-            f.write(json.dumps(log_entry) + "\n")
+key = load_key()
+fernet = Fernet(key)
 
-if __name__ == "__main__":
-    input_csv = "datasets/cicids_dns.csv"  # Adjust path
-    output_jsonl = "datasets/cicids_logs.jsonl"
-    convert_cicids_to_jsonl(input_csv, output_jsonl)
+output_file = "datasets/cicids_logs.jsonl"
+input_file = "datasets/friday_dns_log.csv"
+
+with open(output_file, "w", encoding="utf-8") as outfile:
+    if not os.path.exists(input_file):
+        print(f"Error: {input_file} not found")
+        exit(1)
+    with open(input_file, "r", encoding="utf-8") as csvfile:
+        reader = csv.reader(csvfile)
+        next(reader)  # Skip header if present
+        for row in reader:
+            if len(row) >= 4:  # Ensure all fields are present
+                entry = {
+                    "timestamp": float(row[0]) if row[0] else 0.0,
+                    "src_ip": fernet.encrypt(row[1].encode()).decode(),
+                    "dst_ip": fernet.encrypt(row[2].encode()).decode(),
+                    "type": "query",
+                    "query_name": fernet.encrypt(row[3].encode()).decode() if row[3] else fernet.encrypt("unknown.com".encode()).decode(),
+                    "query_type": int(row[4]) if row[4].isdigit() else 1  # Default to A record
+                }
+                outfile.write(json.dumps(entry) + "\n")
+print(f"Converted data written to {output_file}")
