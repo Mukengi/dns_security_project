@@ -9,3 +9,5 @@ venv/
 *.tar.gz
 *.zip
 *.gz
+*.pcap
+grafana_*.deb
