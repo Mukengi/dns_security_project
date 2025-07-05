@@ -12,3 +12,4 @@ venv/
 *.pcap
 grafana_*.deb
 tools/
+grafana_*.deb
