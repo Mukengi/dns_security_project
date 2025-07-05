@@ -1,0 +1,48 @@
+<!-- templates/live_dashboard.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live DNS Security Alerts</title>
+    <meta http-equiv="refresh" content="30" />
+    <style>
+        body { font-family: Arial; background-color: #f9f9f9; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; border: 1px solid #ccc; }
+        th { background-color: #007acc; color: white; }
+    </style>
+</head>
+<body>
+    <h2>Live Alerts: DNS Tunneling & DGA Detection</h2>
+    <table id="alerts-table">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Domain</th>
+                <th>Type</th>
+                <th>Score</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        fetch('/api/alerts')
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.querySelector('#alerts-table tbody');
+                tbody.innerHTML = "";
+                data.forEach(alert => {
+                    const row = `<tr>
+                        <td>${new Date(alert.timestamp * 1000).toLocaleString()}</td>
+                        <td>${alert.domain}</td>
+                        <td>${alert.type}</td>
+                        <td>${alert.score.toFixed(2)}</td>
+                        <td>${alert.details}</td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+            });
+    </script>
+</body>
+</html>

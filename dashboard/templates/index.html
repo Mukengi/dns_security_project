@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNS Anomaly Dashboard</title>
+    <style>
+        /* General Body Styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* More modern font stack */
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6; /* Light background for a cleaner look */
+            color: #333;
+            line-height: 1.6;
+        }
+
+        /* Header Styles */
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        /* Dashboard Container */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsive grid for cards */
+            gap: 20px; /* Space between grid items */
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Info Card Styles */
+        .info-card {
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+            text-align: center;
+            transition: transform 0.2s ease-in-out; /* Smooth hover effect */
+        }
+
+        .info-card:hover {
+            transform: translateY(-5px); /* Lift effect on hover */
+        }
+
+        .info-card h3 {
+            margin-top: 0;
+            color: #555;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .info-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff; /* Primary color for values */
+        }
+
+        /* Alert Specific Styling */
+        .alert-card .value {
+            color: #dc3545; /* Red for alerts */
+        }
+
+        /* Chart Section Styles */
+        .chart-section {
+            grid-column: 1 / -1; /* Make chart section span full width */
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+
+        .chart-section h2 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap; /* Allow charts to wrap on smaller screens */
+            gap: 20px;
+        }
+
+        .chart-image {
+            max-width: 100%; /* Ensure images are responsive */
+            height: auto;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+
+        /* No data message */
+        .no-data {
+            text-align: center;
+            padding: 20px;
+            color: #777;
+            font-style: italic;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .dashboard-container {
+                grid-template-columns: 1fr; /* Stack cards vertically on small screens */
+            }
+            h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+</head>
+<body>
+    {% if refresh %}
+    <meta http-equiv="refresh" content="60"> {% endif %}
+
+    <h1>DNS Anomaly Dashboard</h1>
+
+    <div class="dashboard-container">
+        <div class="info-card">
+            <h3>CPU Usage</h3>
+            <div class="value">{{ cpu_usage }}%</div>
+        </div>
+        <div class="info-card">
+            <h3>Memory Usage</h3>
+            <div class="value">{{ memory_usage }}%</div>
+        </div>
+        <div class="info-card alert-card">
+            <h3>Total Alerts</h3>
+            <div class="value">{{ total_alerts }}</div>
+        </div>
+        <div class="info-card alert-card">
+            <h3>Rule-Based Alerts</h3>
+            <div class="value">{{ rule_based }}</div>
+        </div>
+        <div class="info-card alert-card">
+            <h3>ML-Based Alerts</h3>
+            <div class="value">{{ ml_based }}</div>
+        </div>
+
+        {% if plot1 or plot2 %} {# Check if at least one plot exists #}
+        <div class="chart-section">
+            <h2>Alert Visualizations</h2>
+            <div class="chart-container">
+                {% if plot1 %}
+                <img class="chart-image" src="{{ plot1 }}" alt="Alert Types Chart">
+                {% endif %}
+                {% if plot2 %}
+                <img class="chart-image" src="{{ plot2 }}" alt="Timestamps Chart">
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <p class="no-data">No data available for plots. Please ensure plot images are generated.</p>
+        {% endif %}
+
+        <div class="chart-section">
+            <h2>Alert Counts by Type</h2>
+            <canvas id="alertChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const ctx = document.getElementById('alertChart').getContext('2d');
+
+            // Ensure plot_data.alert_types.tojson is correctly parsed as a JS object
+            // This assumes the backend renders `plot_data.alert_types.tojson` as a valid JSON string.
+            // Example: `{"TypeA": 10, "TypeB": 5}`
+            let alertData;
+            try {
+                // IMPORTANT: The `tojson` filter in Jinja2 (or equivalent) should output a *string* that represents
+                // a JSON object. We then parse that string into a JavaScript object.
+                // Replace `{{ plot_data.alert_types.tojson }}` with the actual JSON string from your backend.
+                // For demonstration, let's assume this is how the data looks like:
+                // For this example, I'm hardcoding it, but in your actual application,
+                // `{{ plot_data.alert_types.tojson }}` will be replaced by the server-side
+                // rendering of the actual JSON data.
+                alertData = JSON.parse('{{ plot_data.alert_types.tojson | safe }}'); // Use |safe to prevent HTML escaping
+            } catch (e) {
+                console.error("Error parsing alert_types data:", e);
+                alertData = {}; // Default to empty object if parsing fails
+            }
+
+
+            // Fallback for demonstration if `plot_data` is not available or parsed
+            if (Object.keys(alertData).length === 0) {
+                alertData = {
+                    "Brute Force": 15,
+                    "DDoS Attack": 8,
+                    "Malware": 12,
+                    "Phishing": 6,
+                    "Port Scan": 20
+                };
+            }
+
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(alertData),
+                    datasets: [{
+                        label: 'Alert Counts',
+                        data: Object.values(alertData),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.6)', /* Red */
+                            'rgba(54, 162, 235, 0.6)', /* Blue */
+                            'rgba(255, 206, 86, 0.6)', /* Yellow */
+                            'rgba(75, 192, 192, 0.6)', /* Green/Teal */
+                            'rgba(153, 102, 255, 0.6)', /* Purple */
+                            'rgba(255, 159, 64, 0.6)' /* Orange */
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, /* Allow custom height for chart */
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true,
+                                precision: 0 /* Ensure integer ticks for counts */
+                            },
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Number of Alerts'
+                            }
+                        }],
+                        xAxes: [{
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Alert Type'
+                            }
+                        }]
+                    },
+                    legend: {
+                        display: false /* Hide legend if only one dataset */
+                    },
+                    title: {
+                        display: true,
+                        text: 'Distribution of Alert Types',
+                        fontSize: 16,
+                        fontColor: '#333'
+                    },
+                    tooltips: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    hover: {
+                        mode: 'nearest',
+                        intersect: true
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

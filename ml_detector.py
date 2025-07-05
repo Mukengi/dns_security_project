@@ -1,118 +1,66 @@
-# ml_detector.py
-
+# detector.py (partial update)
 import json
-import math
-from collections import defaultdict, Counter
-import numpy as np
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
-from cryptography.fernet import Fernet
-from utils import load_key
-from config import LOG_FILE
+import os
+from datetime import datetime
 
-ALERT_FILE = "logs/ml_alerts.jsonl"
+LOG_FILE = "datasets/cicids_logs.jsonl"
+ALERTS_FILE = "logs/live_alerts.jsonl"
+CHUNK_SIZE = 250
 
-def calculate_entropy(text):
-    """Calculate Shannon entropy of a string."""
-    if not text:
-        return 0.0
-    counts = Counter(text)
-    length = len(text)
-    return -sum((count / length) * math.log2(count / length) for count in counts.values())
+RULES = {
+    "query_spike": lambda x: len(x) > 50,  # High query volume (DNS tunneling)
+    "long_response": lambda x: any(e.get("response_time", 0) > 70 for e in x),  # >70ms (DNS tunneling)
+    "random_domain": lambda x: any(len(d.get("domain", "").split(".")[0]) > 15 or "xn--" in d.get("domain", "") for d in x)  # DGA-like randomness
+}
 
-def digit_ratio(domain):
-    """Ratio of digits in domain name."""
-    digits = sum(c.isdigit() for c in domain)
-    return digits / len(domain) if domain else 0
+def process_chunk(chunk):
+    alerts = []
+    for entry in chunk:
+        try:
+            timestamp = entry.get("timestamp", 0)
+            domain = entry.get("domain", "")
+            response_time = entry.get("response_time", 0)
+            if not timestamp or not domain:
+                continue
+            for rule_name, rule_func in RULES.items():
+                if rule_func(chunk):
+                    alerts.append({
+                        "timestamp": timestamp,
+                        "domain": domain,
+                        "type": rule_name,
+                        "score": 1.0 if rule_name == "random_domain" else response_time / 100,
+                        "details": f"Rule triggered: {rule_name}"
+                    })
+        except Exception as e:
+            print(f"Error processing entry: {e}")
+    return alerts
 
-def consonant_vowel_ratio(domain):
-    """Ratio of consonants to vowels in domain name."""
-    vowels = set("aeiou")
-    v = sum(c in vowels for c in domain.lower())
-    c = sum(c.isalpha() and c not in vowels for c in domain.lower())
-    return c / (v + 1)  # Avoid division by zero
-
-def extract_features(log_file, time_window=300):
-    """Extract features from DNS logs for ML model."""
-    key = load_key()
-    fernet = Fernet(key)
-    features = []
-    queries = []
-    query_counts = defaultdict(int)
-    window_start = None
-
-    with open(log_file, "r", encoding="utf-8") as f:
+def main(log_file):
+    if not os.path.exists(log_file):
+        print(f"Log file {log_file} not found")
+        return
+    os.makedirs(os.path.dirname(ALERTS_FILE), exist_ok=True)
+    with open(log_file, 'r', encoding='utf-8') as f, open(ALERTS_FILE, 'a', encoding='utf-8') as out:
+        chunk = []
         for line in f:
             try:
-                log_entry = json.loads(line)
-                if log_entry.get("type") == "query":
-                    timestamp = log_entry["timestamp"]
-                    query_name = fernet.decrypt(log_entry["query_name"].encode()).decode()
-                    entropy = calculate_entropy(query_name)
-                    query_length = len(query_name)
-                    subdomain_count = query_name.count('.') - 1
-                    digit_ratio_val = digit_ratio(query_name)
-                    cv_ratio = consonant_vowel_ratio(query_name)
-
-                    if window_start is None:
-                        window_start = timestamp
-                    if timestamp > window_start + time_window:
-                        query_counts.clear()
-                        window_start = timestamp
-                    query_counts[query_name] += 1
-
-                    features.append([
-                        query_length,
-                        entropy,
-                        subdomain_count,
-                        query_counts[query_name],
-                        digit_ratio_val,
-                        cv_ratio
-                    ])
-                    queries.append((timestamp, query_name))
-            except Exception as e:
-                print(f"Error parsing log entry: {e}")
-    return np.array(features), queries
-
-def log_alert(alert):
-    """Log machine learning-based anomaly alerts to file."""
-    with open(ALERT_FILE, "a", encoding="utf-8") as f:
-        f.write(json.dumps(alert) + "\n")
-    print(json.dumps(alert, indent=2))
-
-def detect_anomalies(log_file):
-    """Detect potential DGA attacks using Isolation Forest."""
-    features, queries = extract_features(log_file)
-    if len(features) == 0:
-        print("No features extracted")
-        return
-
-    # Normalize features
-    scaler = StandardScaler()
-    features_scaled = scaler.fit_transform(features)
-
-    # Initialize and train the Isolation Forest model
-    model = IsolationForest(n_estimators=200, contamination=0.02, random_state=42)
-    model.fit(features_scaled)
-    predictions = model.predict(features_scaled)
-
-    alerts = []
-    for i, pred in enumerate(predictions):
-        if pred == -1:  # Anomaly detected
-            alert = {
-                "timestamp": queries[i][0],
-                "query_name": queries[i][1],
-                "features": features[i].tolist(),
-                "alert": "Potential DGA detected"
-            }
-            alerts.append(alert)
-            log_alert(alert)
-
-    print(f"Total ML Alerts: {len(alerts)}")
-    return alerts
+                entry = json.loads(line.strip())
+                chunk.append(entry)
+                if len(chunk) >= CHUNK_SIZE:
+                    alerts = process_chunk(chunk)
+                    if alerts:
+                        for alert in alerts:
+                            out.write(json.dumps(alert) + '\n')
+                    chunk = []
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+        if chunk:
+            alerts = process_chunk(chunk)
+            if alerts:
+                for alert in alerts:
+                    out.write(json.dumps(alert) + '\n')
 
 if __name__ == "__main__":
     import sys
     log_file = sys.argv[1] if len(sys.argv) > 1 else LOG_FILE
-    detect_anomalies(log_file)
-
+    main(log_file)

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Live DNS Alert Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial; background: #f4f4f4; padding: 20px; }
+    .metrics { display: flex; gap: 2rem; margin-bottom: 2rem; }
+    .card { padding: 1rem; background: white; border-radius: 10px; box-shadow: 0 0 10px #ccc; }
+  </style>
+</head>
+<body>
+  <h1>DNS Tunneling & DGA Alert Dashboard</h1>
+
+  <div class="metrics">
+    <div class="card"><strong>Total Alerts:</strong> <span id="total-alerts">0</span></div>
+    <div class="card"><strong>CPU:</strong> <span id="cpu">0%</span></div>
+    <div class="card"><strong>Memory:</strong> <span id="mem">0%</span></div>
+  </div>
+
+  <canvas id="alertChart" width="600" height="300"></canvas>
+
+  <script>
+    async function fetchData() {
+      const res = await fetch('/api/alerts');
+      const alerts = await res.json();
+
+      const typeCounts = {};
+      const timeCounts = {};
+      alerts.forEach(a => {
+        const type = a.type || "unknown";
+        const ts = new Date(a.timestamp * 1000).toLocaleString("en-GB").slice(0, 16);
+        typeCounts[type] = (typeCounts[type] || 0) + 1;
+        timeCounts[ts] = (timeCounts[ts] || 0) + 1;
+      });
+
+      document.getElementById("total-alerts").textContent = alerts.length;
+
+      // Fake CPU/memory usage refresh
+      document.getElementById("cpu").textContent = Math.floor(Math.random() * 30) + "%";
+      document.getElementById("mem").textContent = Math.floor(Math.random() * 40) + 40 + "%";
+
+      return { typeCounts, timeCounts };
+    }
+
+    let chart;
+
+    async function updateChart() {
+      const { typeCounts, timeCounts } = await fetchData();
+
+      const labels = Object.keys(timeCounts);
+      const data = Object.values(timeCounts);
+
+      if (chart) {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+      } else {
+        const ctx = document.getElementById('alertChart').getContext('2d');
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Alerts Over Time',
+              data: data,
+              borderColor: 'blue',
+              fill: false
+            }]
+          }
+        });
+      }
+    }
+
+    // Initial load
+    updateChart();
+    // Refresh every 15 seconds
+    setInterval(updateChart, 15000);
+  </script>
+</body>
+</html>

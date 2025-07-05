@@ -1,2 +1,11 @@
-logs/dns_logs.jsonl
-encryption_key.enc
+*.pcap
+*.log
+*.jsonl
+__pycache__/
+venv/
+*.pyc
+*.sqlite3
+.DS_Store
+*.tar.gz
+*.zip
+*.gz
