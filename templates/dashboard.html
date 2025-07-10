@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DNS Threat Detection Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f6fa;
+      padding: 20px;
+      color: #333;
+    }
+    h1 { color: #1f3c88; }
+    .stats {
+      display: flex; gap: 20px; margin-bottom: 30px;
+    }
+    .stat {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      text-align: center;
+      flex: 1;
+    }
+    .stat h2 { margin: 0; color: #555; }
+    .stat p { font-size: 24px; color: #1f3c88; }
+    canvas { max-width: 100%; margin-bottom: 40px; }
+    table {
+      width: 100%; border-collapse: collapse;
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    }
+    th, td {
+      padding: 12px; border-bottom: 1px solid #eee;
+      text-align: left;
+    }
+    tr:hover { background-color: #f1f1f1; }
+    th { background-color: #1f3c88; color: white; }
+    .download {
+      margin-top: 20px;
+      display: inline-block;
+      padding: 10px 20px;
+      background: #1f3c88;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h1>DNS Threat Detection Dashboard</h1>
+
+  <div class="stats">
+    <div class="stat">
+      <h2>Total Alerts</h2>
+      <p>{{ total_alerts }}</p>
+    </div>
+    <div class="stat">
+      <h2>DNS Tunneling</h2>
+      <p>{{ dns_tunnel_alerts }}</p>
+    </div>
+    <div class="stat">
+      <h2>DGA Attacks</h2>
+      <p>{{ dga_alerts }}</p>
+    </div>
+  </div>
+
+  <canvas id="alertChart" width="400" height="150"></canvas>
+
+  <script>
+    const ctx = document.getElementById('alertChart');
+    const chartData = {{ chart_data|safe }};
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['DNS Tunneling', 'DGA Attacks'],
+        datasets: [{
+          label: 'Alert Counts',
+          data: [chartData.dns_tunnel_alerts, chartData.dga_alerts],
+          backgroundColor: ['#f39c12', '#c0392b']
+        }]
+      },
+      options: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            stepSize: 1
+          }
+        }
+      }
+    });
+  </script>
+
+  <h2>Alert Details</h2>
+  <table>
+    <tr>
+      <th>Timestamp</th>
+      <th>Domain</th>
+      <th>Alert Type</th>
+      <th>Score</th>
+      <th>Details</th>
+    </tr>
+    {% for alert in alerts %}
+    <tr>
+      <td>{{ alert.timestamp }}</td>
+      <td>{{ alert.domain }}</td>
+      <td>{{ alert.type }}</td>
+      <td>{{ alert.score }}</td>
+      <td>{{ alert.details }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <a href="/download" class="download">Download Live Alerts</a>
+</body>
+</html>
